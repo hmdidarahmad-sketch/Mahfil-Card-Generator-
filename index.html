@@ -1,0 +1,580 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>মাহফিল কার্ড জেনারেটর</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Galada&family=Baloo+Da+2:wght@500;600;700;800&family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+/*
+  Layout: one fixed-height screen, no page scroll.
+  Light, festive "liquid glass" lifted straight from the poster's own palette
+  (navy / gold / maroon on warm cream) instead of a generic dark blur.
+  Stage (live preview) -> reposition row -> input row, stacked, all glass cards
+  floating over soft blurred colour blooms in the same three poster hues.
+*/
+:root{
+  --cream:#f8f2e2;
+  --cream-deep:#efe6cf;
+  --navy:#0e1a63;
+  --navy-deep:#081140;
+  --gold:#c9972e;
+  --gold-light:#f3d48a;
+  --maroon:#8e1b1b;
+  --ink:#201c3a;
+  --ink-dim:#5c5a78;
+  --glass: rgba(255,255,255,0.62);
+  --glass-strong: rgba(255,255,255,0.82);
+  --glass-border: rgba(255,255,255,0.9);
+  --glass-shadow: rgba(26,20,70,0.22);
+  color-scheme: light;
+}
+/* This page deliberately commits to one bright, festive look drawn from the
+   artwork's own navy/gold/maroon palette, so colours are fixed rather than
+   branching by viewer theme. */
+
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{height:100%;}
+body{
+  margin:0;
+  background:var(--cream);
+  color:var(--ink);
+  font-family:"Hind Siliguri","Noto Sans Bengali",system-ui,sans-serif;
+  overflow:hidden;
+  padding-left:max(14px, env(safe-area-inset-left,0px));
+  padding-right:max(14px, env(safe-area-inset-right,0px));
+  padding-block:max(10px, env(safe-area-inset-top,0px)) max(10px, env(safe-area-inset-bottom,0px));
+}
+
+.backdrop{position:fixed; inset:0; z-index:-1; overflow:hidden; background:var(--cream);}
+.backdrop i{
+  position:absolute;
+  display:block;
+  border-radius:50%;
+  filter:blur(70px);
+  opacity:.55;
+}
+.backdrop i:nth-child(1){ width:50vmax; height:50vmax; top:-24vmax; left:-20vmax; background:var(--navy); opacity:.32;}
+.backdrop i:nth-child(2){ width:44vmax; height:44vmax; bottom:-22vmax; right:-18vmax; background:var(--gold); opacity:.3;}
+.backdrop i:nth-child(3){ width:30vmax; height:30vmax; bottom:4vmax; left:-16vmax; background:var(--maroon); opacity:.18;}
+
+.app{
+  height:100%;
+  max-width:460px;
+  margin:0 auto;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  min-height:0;
+}
+
+header{
+  flex:none;
+  text-align:center;
+  padding:9px 14px;
+  border-radius:18px;
+  background:var(--glass);
+  border:1px solid var(--glass-border);
+  backdrop-filter:blur(18px) saturate(160%);
+  -webkit-backdrop-filter:blur(18px) saturate(160%);
+  box-shadow:0 10px 26px -16px var(--glass-shadow);
+}
+header h1{
+  margin:0;
+  font-family:"Galada","Hind Siliguri",cursive;
+  font-size:clamp(20px,5.4vw,25px);
+  font-weight:400;
+  color:var(--maroon);
+  text-wrap:balance;
+}
+header p{margin:2px 0 0; font-size:12px; color:var(--ink-dim); font-weight:500;}
+
+.stage-wrap{
+  flex:1;
+  min-height:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.stage{
+  position:relative;
+  width:100%;
+  max-height:100%;
+  aspect-ratio:1/1;
+  border-radius:24px;
+  overflow:hidden;
+  touch-action:none;
+  border:3px solid var(--glass-strong);
+  box-shadow:0 22px 46px -18px var(--glass-shadow), 0 2px 0 rgba(255,255,255,.6) inset;
+  background:var(--navy);
+}
+.stage canvas{display:block; width:100%; height:100%;}
+
+.empty-hint{
+  position:absolute; inset:0;
+  display:flex; align-items:center; justify-content:center;
+  pointer-events:none;
+  background:rgba(8,17,64,.28);
+}
+.empty-hint span{
+  background:rgba(255,255,255,.9);
+  border:1px solid var(--glass-border);
+  padding:9px 16px;
+  border-radius:999px;
+  font-size:12.5px;
+  font-weight:600;
+  color:var(--navy);
+}
+.stage.has-photo .empty-hint{display:none;}
+
+/* --- reposition card: sits in normal flow, under the stage --- */
+.card{
+  flex:none;
+  border-radius:18px;
+  background:var(--glass);
+  border:1px solid var(--glass-border);
+  backdrop-filter:blur(18px) saturate(160%);
+  -webkit-backdrop-filter:blur(18px) saturate(160%);
+  box-shadow:0 10px 26px -18px var(--glass-shadow);
+  padding:9px 12px;
+}
+
+.reposition-row{
+  display:flex; align-items:center; gap:10px;
+  opacity:.4;
+  pointer-events:none;
+  transition:opacity .2s;
+}
+.reposition-row.enabled{opacity:1; pointer-events:auto;}
+.reposition-row span.lbl{font-size:11.5px; color:var(--ink-dim); font-weight:600; flex:none;}
+.reposition-row input[type=range]{flex:1; accent-color:var(--gold); height:20px;}
+.reposition-row button{
+  flex:none;
+  width:32px; height:32px;
+  border-radius:50%;
+  border:1px solid var(--glass-border);
+  background:var(--glass-strong);
+  color:var(--navy);
+  display:flex; align-items:center; justify-content:center;
+  padding:0; cursor:pointer;
+}
+.reposition-row svg{width:16px; height:16px;}
+
+.toolbar{
+  flex:none;
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+
+.icon-btn{
+  flex:none;
+  width:46px; height:46px;
+  border-radius:15px;
+  border:1px solid var(--glass-border);
+  background:linear-gradient(160deg, var(--navy), var(--navy-deep));
+  color:var(--gold-light);
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer;
+  position:relative;
+  box-shadow:0 8px 18px -10px var(--glass-shadow);
+}
+.icon-btn svg{width:22px; height:22px;}
+.icon-btn input[type=file]{
+  position:absolute; inset:0; opacity:0; cursor:pointer;
+}
+
+.name-field{
+  flex:1;
+  min-width:0;
+  height:46px;
+  border-radius:15px;
+  border:1px solid var(--glass-border);
+  background:var(--glass-strong);
+  color:var(--ink);
+  padding:0 14px;
+  font-family:"Hind Siliguri",inherit;
+  font-size:15px;
+  font-weight:600;
+}
+.name-field::placeholder{color:var(--ink-dim); font-weight:500;}
+.name-field:focus{outline:none; border-color:var(--gold); box-shadow:0 0 0 3px rgba(201,151,46,.25);}
+
+.save-btn{
+  flex:none;
+  height:46px;
+  padding:0 17px;
+  border-radius:15px;
+  border:none;
+  background:linear-gradient(160deg, var(--gold-light), var(--gold));
+  color:var(--navy-deep);
+  font-family:inherit;
+  font-weight:800;
+  font-size:14px;
+  display:flex; align-items:center; gap:7px;
+  cursor:pointer;
+  box-shadow:0 10px 20px -10px rgba(201,151,46,.7);
+}
+.save-btn svg{width:19px; height:19px;}
+.save-btn:active{transform:scale(.97);}
+.save-btn:disabled{opacity:.45; box-shadow:none;}
+
+.toast{
+  position:fixed;
+  left:50%; bottom:max(16px, env(safe-area-inset-bottom,0px));
+  transform:translate(-50%, 12px);
+  background:rgba(14,26,99,.92);
+  border:1px solid rgba(255,255,255,.25);
+  backdrop-filter:blur(16px);
+  color:#fff;
+  padding:11px 18px;
+  border-radius:14px;
+  font-size:13px;
+  font-weight:500;
+  max-width:min(92vw, 420px);
+  text-align:center;
+  line-height:1.5;
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .25s, transform .25s;
+  z-index:20;
+}
+.toast.show{opacity:1; transform:translate(-50%, 0); pointer-events:auto;}
+
+.result-overlay{
+  position:fixed; inset:0; z-index:30;
+  display:none;
+  align-items:center; justify-content:center;
+  padding:max(16px, env(safe-area-inset-top,0px)) max(16px, env(safe-area-inset-right,0px)) max(16px, env(safe-area-inset-bottom,0px)) max(16px, env(safe-area-inset-left,0px));
+  background:rgba(8,13,40,.55);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+}
+.result-overlay.show{display:flex;}
+.result-card{
+  width:100%; max-width:420px; max-height:100%;
+  overflow:auto;
+  display:flex; flex-direction:column; gap:12px;
+  padding:16px;
+  border-radius:22px;
+  background:var(--glass-strong);
+  border:1px solid var(--glass-border);
+  box-shadow:0 30px 60px -20px rgba(8,13,40,.55);
+}
+.result-head{display:flex; align-items:center; justify-content:space-between; gap:10px;}
+.result-head h2{margin:0; font-size:15px; color:var(--navy); font-weight:700;}
+.result-close{
+  flex:none; width:32px; height:32px; border-radius:50%;
+  border:1px solid var(--glass-border); background:#fff; color:var(--navy);
+  display:flex; align-items:center; justify-content:center; cursor:pointer;
+}
+.result-close svg{width:16px; height:16px;}
+.result-card img{
+  width:100%; display:block; border-radius:14px;
+  box-shadow:0 10px 24px -12px rgba(8,13,40,.4);
+  -webkit-touch-callout:default;
+}
+.result-note{
+  font-size:12.5px; line-height:1.55; color:var(--ink-dim);
+  background:rgba(14,26,99,.08); border-radius:12px; padding:9px 11px;
+}
+.result-note b{color:var(--navy);}
+.share-btn{
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  height:46px; border-radius:14px; border:none;
+  background:linear-gradient(160deg, var(--gold-light), var(--gold));
+  color:var(--navy-deep); font-family:inherit; font-weight:800; font-size:14.5px;
+  cursor:pointer;
+}
+.share-btn svg{width:19px; height:19px;}
+.share-btn:active{transform:scale(.98);}
+</style>
+
+<div class="backdrop"><i></i><i></i><i></i></div>
+
+<div class="app">
+  <header>
+    <h1>মাহফিল কার্ড তৈরি করুন</h1>
+    <p>ছবি দিন, নাম লিখুন, PNG ডাউনলোড করুন</p>
+  </header>
+
+  <div class="stage-wrap">
+    <div class="stage" id="stage">
+      <canvas id="canvas" width="2048" height="2048" aria-label="কার্ডের প্রিভিউ"></canvas>
+      <div class="empty-hint"><span>নিচে থেকে আপনার ছবি দিন</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="reposition-row" id="repositionRow">
+      <span class="lbl">ছবি ছোট-বড়</span>
+      <input type="range" id="zoomSlider" min="1" max="3" step="0.01" value="1" aria-label="ছবি জুম ইন জুম আউট">
+      <button id="resetPos" type="button" aria-label="মাঝ বরাবর আনুন" title="মাঝ বরাবর আনুন">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <label class="icon-btn" title="ছবি আপলোড করুন">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h3l2-2h6l2 2h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>
+      <input type="file" id="photoInput" accept="image/*">
+    </label>
+
+    <input type="text" id="nameInput" class="name-field" placeholder="আপনার নাম লিখুন" maxlength="60">
+
+    <button class="save-btn" id="saveBtn" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+      PNG
+    </button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="result-overlay" id="resultOverlay">
+  <div class="result-card">
+    <div class="result-head">
+      <h2>কার্ড তৈরি হয়ে গেছে</h2>
+      <button class="result-close" id="resultClose" type="button" aria-label="বন্ধ করুন">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <img id="resultImg" alt="তৈরি হওয়া মাহফিল কার্ড">
+    <button class="share-btn" id="shareBtn" type="button" style="display:none">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3m0 0 4 4m-4-4-4 4"/><path d="M4 13v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6"/></svg>
+      ফোনে সরাসরি সেভ করুন
+    </button>
+    <div class="result-note" id="resultNote"><b>সেভ করতে:</b> ছবির উপর <b>২-৩ সেকেন্ড চেপে ধরুন</b>, তারপর যে মেনু আসবে সেখানে "Save Image" বা "Download image" চাপুন। কম্পিউটারে রাইট-ক্লিক করে "Save Image As" বেছে নিন।</div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var canvas = document.getElementById("canvas");
+  var ctx = canvas.getContext("2d");
+  var stage = document.getElementById("stage");
+  var W = canvas.width, H = canvas.height;
+
+  // Geometry measured from the supplied artwork (fractions of W/H, square canvas).
+  var CIRCLE = { cx: 0.6449 * W, cy: 0.5356 * H, r: 0.163 * W };
+  // x matches the exact centre of "আপনারা সকলেই আমন্ত্রিত" below it;
+  // maxWidth is the widest a line can get without crossing the blue banner's edge.
+  var NAME_POS = { x: 0.671 * W, y: 0.878 * H, maxWidth: 0.58 * W };
+
+  // Requested name font is "LiTitirUnicode-Regular"; that file isn't available in
+  // this environment (no internet access to fetch arbitrary font binaries), so a
+  // close, warm, rounded Bangla face stands in until the real font file is supplied.
+  var NAME_FONT_FAMILY = '"Baloo Da 2","Hind Siliguri",sans-serif';
+
+  var bg = new Image();
+  var bgReady = false;
+  bg.onload = function(){ bgReady = true; draw(); };
+  bg.src = "bg.jpg";
+
+  var photo = null;
+  var photoBaseScale = 1;
+  var photoScale = 1;
+  var photoOffset = { x: 0, y: 0 };
+  var zoom = 1;
+  var name = "";
+
+  function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+
+  function centerPhoto(){
+    if(!photo) return;
+    photoScale = photoBaseScale * zoom;
+    var dw = photo.naturalWidth * photoScale;
+    var dh = photo.naturalHeight * photoScale;
+    photoOffset.x = CIRCLE.cx - dw/2;
+    photoOffset.y = CIRCLE.cy - dh/2;
+  }
+
+  function constrainOffset(){
+    if(!photo) return;
+    var dw = photo.naturalWidth * photoScale;
+    var dh = photo.naturalHeight * photoScale;
+    var minX = CIRCLE.cx + CIRCLE.r - dw;
+    var maxX = CIRCLE.cx - CIRCLE.r;
+    var minY = CIRCLE.cy + CIRCLE.r - dh;
+    var maxY = CIRCLE.cy - CIRCLE.r;
+    if(minX <= maxX) photoOffset.x = clamp(photoOffset.x, minX, maxX);
+    if(minY <= maxY) photoOffset.y = clamp(photoOffset.y, minY, maxY);
+  }
+
+  function fitFont(text, maxWidth, baseSize){
+    var size = baseSize;
+    ctx.font = '700 ' + size + 'px ' + NAME_FONT_FAMILY;
+    // Shrinks all the way down if needed -- the name must never cross the
+    // blue banner's edge, even for a long name, so there is no hard floor.
+    while(ctx.measureText(text).width > maxWidth && size > 14){
+      size -= 1;
+      ctx.font = '700 ' + size + 'px ' + NAME_FONT_FAMILY;
+    }
+    return size;
+  }
+
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    if(bgReady) ctx.drawImage(bg,0,0,W,H);
+    else { ctx.fillStyle="#0e1a63"; ctx.fillRect(0,0,W,H); }
+
+    if(photo){
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(CIRCLE.cx, CIRCLE.cy, CIRCLE.r - 2, 0, Math.PI*2);
+      ctx.clip();
+      ctx.drawImage(photo, photoOffset.x, photoOffset.y,
+        photo.naturalWidth*photoScale, photo.naturalHeight*photoScale);
+      ctx.restore();
+    }
+
+    if(name){
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "#ffffff";
+      var size = fitFont(name, NAME_POS.maxWidth, 0.052*W);
+      ctx.font = '700 ' + size + 'px ' + NAME_FONT_FAMILY;
+      ctx.fillText(name, NAME_POS.x, NAME_POS.y);
+      ctx.restore();
+    }
+  }
+
+  function showToast(msg, ms){
+    var t = document.getElementById("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(t._timer);
+    t._timer = setTimeout(function(){ t.classList.remove("show"); }, ms || 3200);
+  }
+
+  // ---- photo upload ----
+  document.getElementById("photoInput").addEventListener("change", function(e){
+    var file = e.target.files && e.target.files[0];
+    if(!file) return;
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      var img = new Image();
+      img.onload = function(){
+        photo = img;
+        photoBaseScale = (2*CIRCLE.r) / Math.min(img.naturalWidth, img.naturalHeight);
+        zoom = 1;
+        document.getElementById("zoomSlider").value = 1;
+        centerPhoto();
+        draw();
+        stage.classList.add("has-photo");
+        document.getElementById("repositionRow").classList.add("enabled");
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  });
+
+  document.getElementById("zoomSlider").addEventListener("input", function(e){
+    if(!photo) return;
+    zoom = parseFloat(e.target.value);
+    var oldScale = photoScale;
+    var cx0 = photoOffset.x + (photo.naturalWidth*oldScale)/2;
+    var cy0 = photoOffset.y + (photo.naturalHeight*oldScale)/2;
+    photoScale = photoBaseScale * zoom;
+    photoOffset.x = cx0 - (photo.naturalWidth*photoScale)/2;
+    photoOffset.y = cy0 - (photo.naturalHeight*photoScale)/2;
+    constrainOffset();
+    draw();
+  });
+
+  document.getElementById("resetPos").addEventListener("click", function(){
+    if(!photo) return;
+    zoom = 1;
+    document.getElementById("zoomSlider").value = 1;
+    centerPhoto();
+    draw();
+  });
+
+  // ---- drag to reposition (directly on the stage) ----
+  var dragging = false, lastX = 0, lastY = 0;
+  function toCanvasCoords(clientX, clientY){
+    var rect = canvas.getBoundingClientRect();
+    return {
+      x: (clientX - rect.left) * (W / rect.width),
+      y: (clientY - rect.top) * (H / rect.height)
+    };
+  }
+  canvas.addEventListener("pointerdown", function(e){
+    if(!photo) return;
+    dragging = true;
+    var p = toCanvasCoords(e.clientX, e.clientY);
+    lastX = p.x; lastY = p.y;
+    canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener("pointermove", function(e){
+    if(!dragging || !photo) return;
+    var p = toCanvasCoords(e.clientX, e.clientY);
+    photoOffset.x += (p.x - lastX);
+    photoOffset.y += (p.y - lastY);
+    lastX = p.x; lastY = p.y;
+    constrainOffset();
+    draw();
+  });
+  function endDrag(){ dragging = false; }
+  canvas.addEventListener("pointerup", endDrag);
+  canvas.addEventListener("pointercancel", endDrag);
+
+  // ---- name ----
+  document.getElementById("nameInput").addEventListener("input", function(e){
+    name = e.target.value.trim();
+    draw();
+  });
+
+  // ---- save / PNG ----
+  // A triggered file download doesn't work inside this preview frame, so instead
+  // the finished PNG is shown full-size for a native long-press / right-click save --
+  // that always works because it's the browser's own image-save, not a script download.
+  var resultOverlay = document.getElementById("resultOverlay");
+  var resultImg = document.getElementById("resultImg");
+  var shareBtn = document.getElementById("shareBtn");
+  var lastBlob = null;
+
+  function canShareFiles(){
+    try{
+      if(!navigator.share || !navigator.canShare) return false;
+      var probe = new File([new Uint8Array([0])], "p.png", {type:"image/png"});
+      return navigator.canShare({ files:[probe] });
+    }catch(err){ return false; }
+  }
+
+  document.getElementById("saveBtn").addEventListener("click", function(){
+    draw();
+    canvas.toBlob(function(blob){
+      if(!blob){ showToast("দুঃখিত, ছবি তৈরি করা যায়নি।"); return; }
+      lastBlob = blob;
+      resultImg.src = URL.createObjectURL(blob);
+      shareBtn.style.display = canShareFiles() ? "flex" : "none";
+      resultOverlay.classList.add("show");
+    }, "image/png");
+  });
+
+  shareBtn.addEventListener("click", function(){
+    if(!lastBlob) return;
+    var file = new File([lastBlob], "mahfil-card.png", {type:"image/png"});
+    navigator.share({ files:[file], title:"মাহফিল কার্ড" }).catch(function(){
+      // user cancelled, or the OS declined it -- the image is still right there to long-press.
+    });
+  });
+
+  function closeResult(){ resultOverlay.classList.remove("show"); }
+  document.getElementById("resultClose").addEventListener("click", closeResult);
+  resultOverlay.addEventListener("click", function(e){
+    if(e.target === resultOverlay) closeResult();
+  });
+
+  draw();
+})();
+</script>
+
+</body></html>
